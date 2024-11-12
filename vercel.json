@@ -1,6 +1,6 @@
 {
   "functions": {
-    "api/sync.ts": {
+    "api/sync.go": {
       "maxDuration": 30
     }
   }
