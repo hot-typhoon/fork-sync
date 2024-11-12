@@ -2,9 +2,14 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
+	"reflect"
+	"strings"
+	"unicode"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
@@ -12,36 +17,75 @@ import (
 	gitHttp "github.com/go-git/go-git/v5/plumbing/transport/http"
 )
 
-type RequestPayload struct {
-	Repository struct {
-		FullName string `json:"full_name"`
-	} `json:"repository"`
-	Ref string `json:"ref"`
+type Params struct {
+	UpstreamRepo   string
+	UpstreamBranch string
+	ForkRepo       string
+	ForkBranch     string
+	Pat            string
 }
 
-func getMessage(msg string) string {
-	response := map[string]string{"message": msg}
-	jsonResponse, _ := json.Marshal(response)
-	return string(jsonResponse)
+func CamelToSnake(s string) string {
+	var result strings.Builder
+	for i, r := range s {
+		if unicode.IsUpper(r) && i > 0 {
+			result.WriteRune('_')
+		}
+		result.WriteRune(unicode.ToLower(r))
+	}
+	return result.String()
 }
 
-func sync(upstreamRepo, upstreamBranch, forkRepo, forkBranch, pat string) error {
+func ReadParamsFromQuery(queryParams url.Values) (*Params, error) {
+	params := &Params{}
+	missing := make([]string, 0)
+	val := reflect.ValueOf(params).Elem()
+	for i := 0; i < val.NumField(); i++ {
+		field := val.Type().Field(i)
+		paramName := CamelToSnake(field.Name)
+		paramValue := queryParams.Get(paramName)
+		if paramValue == "" {
+			missing = append(missing, paramName)
+		}
+		val.Field(i).SetString(paramValue)
+	}
+
+	if len(missing) != 0 {
+		return nil, fmt.Errorf("missing parameters: %v", missing)
+	}
+
+	return params, nil
+}
+
+func response(w http.ResponseWriter, status int, message string) {
+	h := w.Header()
+
+	h.Del("Content-Length")
+	h.Set("Content-Type", "application/json")
+	h.Set("X-Content-Type-Options", "nosniff")
+
+	w.WriteHeader(status)
+	jsonResponse, _ := json.Marshal(map[string]string{"message": message})
+	w.Write([]byte(jsonResponse))
+}
+
+func sync(params *Params) error {
 	tempDir, err := os.MkdirTemp("", "repo-")
 	if err != nil {
 		return err
 	}
 	defer os.RemoveAll(tempDir)
 
-	upstreamUrl := fmt.Sprintf("https://github.com/%s.git", upstreamRepo)
-	forkUrl := fmt.Sprintf("https://github.com/%s.git", forkRepo)
+	upstreamUrl := fmt.Sprintf("https://github.com/%s.git", params.UpstreamRepo)
+	forkUrl := fmt.Sprintf("https://github.com/%s.git", params.ForkRepo)
 
 	_, err = git.PlainClone(tempDir, false, &git.CloneOptions{
 		URL:           upstreamUrl,
-		ReferenceName: plumbing.ReferenceName("refs/heads/" + upstreamBranch),
+		ReferenceName: plumbing.ReferenceName("refs/heads/" + params.UpstreamBranch),
 		SingleBranch:  true,
 		Auth: &gitHttp.BasicAuth{
 			Username: "fork-sync",
-			Password: pat,
+			Password: params.Pat,
 		},
 	})
 	if err != nil {
@@ -64,54 +108,39 @@ func sync(upstreamRepo, upstreamBranch, forkRepo, forkBranch, pat string) error 
 	err = repo.Push(&git.PushOptions{
 		RemoteName: "fork",
 		RefSpecs: []config.RefSpec{
-			config.RefSpec(fmt.Sprintf("+refs/heads/%s:refs/heads/%s", upstreamBranch, forkBranch)),
+			config.RefSpec(fmt.Sprintf("+refs/heads/%s:refs/heads/%s", params.UpstreamBranch, params.ForkBranch)),
 		},
 		Auth: &gitHttp.BasicAuth{
 			Username: "fork-sync",
-			Password: pat,
+			Password: params.Pat,
 		},
 		Force: true,
 	})
+
+	if errors.Is(err, git.NoErrAlreadyUpToDate) {
+		return nil
+	}
+
 	return err
 }
 
 func Handler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, getMessage("Method not allowed"), http.StatusMethodNotAllowed)
+		response(w, http.StatusMethodNotAllowed, "Method not allowed")
 		return
 	}
 
-	params := r.URL.Query()
-	forkRepo := params.Get("fork_repo")
-	forkBranch := params.Get("fork_branch")
-	upstreamRepo := params.Get("upstream_repo")
-	upstreamBranch := params.Get("upstream_branch")
-	pat := params.Get("pat")
-
-	msg := make([]string, 0)
-
-	switch {
-	case forkRepo == "":
-		msg = append(msg, "fork_repo")
-	case forkBranch == "":
-		msg = append(msg, "fork_branch")
-	case upstreamRepo == "":
-		msg = append(msg, "upstream_repo")
-	case upstreamBranch == "":
-		msg = append(msg, "upstream_branch")
-	}
-
-	if len(msg) != 0 {
-		http.Error(w, getMessage(fmt.Sprintf("Please provide the following parameters: %v", msg)), http.StatusBadRequest)
-		return
-	}
-
-	err := sync(upstreamRepo, upstreamBranch, forkRepo, forkBranch, pat)
+	params, err := ReadParamsFromQuery(r.URL.Query())
 	if err != nil {
-		http.Error(w, getMessage(err.Error()), http.StatusInternalServerError)
+		response(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(getMessage("OK")))
+	err = sync(params)
+	if err != nil {
+		response(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	response(w, http.StatusOK, "OK")
 }
