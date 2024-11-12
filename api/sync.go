@@ -1,15 +1,13 @@
 package handler
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
+	"hot-typhoon/sync/pkg/util"
 	"net/http"
 	"net/url"
 	"os"
 	"reflect"
-	"strings"
-	"unicode"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
@@ -25,24 +23,13 @@ type Params struct {
 	Pat            string
 }
 
-func CamelToSnake(s string) string {
-	var result strings.Builder
-	for i, r := range s {
-		if unicode.IsUpper(r) && i > 0 {
-			result.WriteRune('_')
-		}
-		result.WriteRune(unicode.ToLower(r))
-	}
-	return result.String()
-}
-
 func ReadParamsFromQuery(queryParams url.Values) (*Params, error) {
 	params := &Params{}
 	missing := make([]string, 0)
 	val := reflect.ValueOf(params).Elem()
 	for i := 0; i < val.NumField(); i++ {
 		field := val.Type().Field(i)
-		paramName := CamelToSnake(field.Name)
+		paramName := util.CamelToSnake(field.Name)
 		paramValue := queryParams.Get(paramName)
 		if paramValue == "" {
 			missing = append(missing, paramName)
@@ -55,18 +42,6 @@ func ReadParamsFromQuery(queryParams url.Values) (*Params, error) {
 	}
 
 	return params, nil
-}
-
-func response(w http.ResponseWriter, status int, message string) {
-	h := w.Header()
-
-	h.Del("Content-Length")
-	h.Set("Content-Type", "application/json")
-	h.Set("X-Content-Type-Options", "nosniff")
-
-	w.WriteHeader(status)
-	jsonResponse, _ := json.Marshal(map[string]string{"message": message})
-	w.Write([]byte(jsonResponse))
 }
 
 func sync(params *Params) error {
@@ -126,21 +101,21 @@ func sync(params *Params) error {
 
 func Handler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		response(w, http.StatusMethodNotAllowed, "Method not allowed")
+		util.HttpResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
 		return
 	}
 
 	params, err := ReadParamsFromQuery(r.URL.Query())
 	if err != nil {
-		response(w, http.StatusBadRequest, err.Error())
+		util.HttpResponse(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	err = sync(params)
 	if err != nil {
-		response(w, http.StatusInternalServerError, err.Error())
+		util.HttpResponse(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	response(w, http.StatusOK, "OK")
+	util.HttpResponse(w, http.StatusOK, "OK")
 }
