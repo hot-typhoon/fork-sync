@@ -15,7 +15,7 @@ type QueryParams struct {
 	// IsShallow string `sync:"false"`
 }
 
-func Handler(w http.ResponseWriter, r *http.Request) {
+func handler(w http.ResponseWriter, r *http.Request) {
 	defer program.Cancel()
 	if r.Method != http.MethodPost {
 		util.HttpResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
@@ -40,4 +40,8 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	util.HttpResponse(w, http.StatusOK, "OK")
+}
+
+func Handler(w http.ResponseWriter, r *http.Request) {
+	handler(w, r)
 }
