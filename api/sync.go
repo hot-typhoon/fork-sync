@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"hot-typhoon/sync/pkg/program"
 	"hot-typhoon/sync/pkg/sync"
 	"hot-typhoon/sync/pkg/util"
 	"net/http"
@@ -16,7 +15,6 @@ type QueryParams struct {
 }
 
 func Handler(w http.ResponseWriter, r *http.Request) {
-	defer program.Cancel()
 	if r.Method != http.MethodPost {
 		util.HttpResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
 		return
