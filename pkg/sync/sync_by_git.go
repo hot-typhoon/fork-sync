@@ -13,8 +13,8 @@ import (
 	"github.com/google/go-github/v66/github"
 )
 
-func SyncByGit(ctx context.Context, owner, repo, branch, pat string) error {
-	forkRepo, _, err := github.NewClientWithEnvProxy().WithAuthToken(pat).Repositories.Get(ctx, owner, repo)
+func SyncByGit(owner, repo, branch, pat string) error {
+	forkRepo, _, err := github.NewClientWithEnvProxy().WithAuthToken(pat).Repositories.Get(context.Background(), owner, repo)
 	if err != nil {
 		return err
 	}

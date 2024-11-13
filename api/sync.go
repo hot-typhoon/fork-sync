@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"context"
 	"hot-typhoon/sync/pkg/sync"
 	"hot-typhoon/sync/pkg/util"
 	"net/http"
@@ -16,8 +15,6 @@ type QueryParams struct {
 }
 
 func Handler(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	if r.Method != http.MethodPost {
 		util.HttpResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
 		return
@@ -29,9 +26,9 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	errByAPI := sync.SyncByAPI(ctx, params.Owner, params.Repo, params.Branch, params.Pat)
+	errByAPI := sync.SyncByAPI(params.Owner, params.Repo, params.Branch, params.Pat)
 	if errByAPI != nil {
-		errByGit := sync.SyncByGit(ctx, params.Owner, params.Repo, params.Branch, params.Pat)
+		errByGit := sync.SyncByGit(params.Owner, params.Repo, params.Branch, params.Pat)
 		if errByGit != nil {
 			util.HttpResponse(w, http.StatusInternalServerError, []string{errByAPI.Error(), errByGit.Error()})
 			return
