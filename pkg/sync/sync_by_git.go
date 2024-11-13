@@ -1,9 +1,9 @@
 package sync
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	"hot-typhoon/sync/pkg/program"
 	"os"
 
 	"github.com/go-git/go-git/v5"
@@ -13,8 +13,8 @@ import (
 	"github.com/google/go-github/v66/github"
 )
 
-func SyncByGit(owner, repo, branch, pat string) error {
-	forkRepo, _, err := github.NewClientWithEnvProxy().WithAuthToken(pat).Repositories.Get(program.Ctx, owner, repo)
+func SyncByGit(ctx context.Context, owner, repo, branch, pat string) error {
+	forkRepo, _, err := github.NewClientWithEnvProxy().WithAuthToken(pat).Repositories.Get(ctx, owner, repo)
 	if err != nil {
 		return err
 	}
