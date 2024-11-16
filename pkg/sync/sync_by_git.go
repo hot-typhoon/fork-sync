@@ -13,7 +13,7 @@ import (
 	"github.com/google/go-github/v66/github"
 )
 
-func SyncByGit(owner, repo, branch, pat string) error {
+func SyncByGit(owner, repo, branch, pat string, shallow bool) error {
 	forkRepo, _, err := github.NewClientWithEnvProxy().WithAuthToken(pat).Repositories.Get(context.Background(), owner, repo)
 	if err != nil {
 		return err
@@ -30,10 +30,16 @@ func SyncByGit(owner, repo, branch, pat string) error {
 	}
 	defer os.RemoveAll(tempDir)
 
+	depth := 0
+	if shallow {
+		depth = 1
+	}
+
 	_, err = git.PlainClone(tempDir, false, &git.CloneOptions{
 		URL:           parentRepo.GetCloneURL(),
 		ReferenceName: plumbing.ReferenceName("refs/heads/" + branch),
 		SingleBranch:  true,
+		Depth:         depth,
 		Auth: &gitHttp.BasicAuth{
 			Username: "fork-sync",
 			Password: pat,
