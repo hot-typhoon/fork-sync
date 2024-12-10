@@ -51,7 +51,15 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if len(errs) > 0 {
+	if params.Only != "none" {
+		if len(errs) > 1 {
+			util.HttpResponse(w, http.StatusInternalServerError, errs)
+		} else if len(errs) == 1 {
+			util.HttpResponse(w, http.StatusOK, "OK but "+errs[0])
+		} else {
+			util.HttpResponse(w, http.StatusOK, "OK")
+		}
+	} else if len(errs) > 0 {
 		util.HttpResponse(w, http.StatusInternalServerError, errs)
 	} else {
 		util.HttpResponse(w, http.StatusOK, "OK")
